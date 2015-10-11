@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kmodule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://jboss.org/kie/6.0.0/kmodule">
+
+
+    <kbase name="GPSHarvestKB" eventProcessingMode="stream">
+        <ksession name="GPSHarvestKS"/>
+    </kbase>
+    
+    <kbase name="AEIHarvestKB" eventProcessingMode="stream">
+        <ksession name="AEIHarvestKS"/>
+    </kbase>
+
+</kmodule>

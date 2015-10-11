@@ -1,0 +1,54 @@
+//created on: Sep 10, 2015
+package com.bnsf.drools.poc.harvest
+
+import com.bnsf.drools.poc.events.MissingGPSLocoEvent;
+import com.bnsf.drools.poc.events.ConfidenceLevelChangeEvent;
+import com.bnsf.drools.poc.model.Train;
+import com.bnsf.drools.poc.model.LocomotiveInventory;
+
+global org.slf4j.Logger logger
+global com.bnsf.drools.poc.cache.repo.CacheRepository trainCache
+
+
+dialect "java"
+
+declare MissingGPSLocoEvent
+    @role( event )
+end
+
+rule "GPSLocoEvent did not receive a subsequent GPSLocoEvent"
+    when
+        $previousGPSLocoEvent : GPSLocoEvent( ) from entry-point "GPS Harvest Stream"
+        not GPSLocoEvent( this != $previousGPSLocoEvent, this after[0s,1s] $previousGPSLocoEvent, locomotiveId == $previousGPSLocoEvent.locomotiveId ) from entry-point "GPS Harvest Stream"
+    then
+        logger.error("********** Consecutive GPSLocoEvent event missing for {}",$previousGPSLocoEvent.getLocomotiveId());
+        insertLogical(new MissingGPSLocoEvent($previousGPSLocoEvent));
+end
+
+rule "Handle MissingGPSLocoEvent"
+    when
+        $mg : MissingGPSLocoEvent( $previousGPSLocoEvent : gpsLocoEvent )
+        $l : LocomotiveInventory( locomotiveId == $previousGPSLocoEvent.locomotiveId )
+    then
+        /* TODO handle missing LocomotiveInventory and Train */
+        /* load the train */
+        Train train = (Train)trainCache.get($l.getTrainId());
+
+        /* update the confidence level */
+         double oldConfidenceLevel = train.getConfidenceLevel();
+         modify( train ){ calculatePercentage(ConfidenceLevelPercentage.GPSLocoEvent.getNegativePercentageLevel()) };
+         trainCache.save(train.getTrainId(),train);
+
+         double newConfidenceLevel = train.getConfidenceLevel();
+
+         insert(new ConfidenceLevelChangeEvent(oldConfidenceLevel, newConfidenceLevel, train));
+end
+
+
+rule "GPSLocoEvent did not receive a subsequent AEIEvent"
+    when
+        $gpsLocoEvent : GPSLocoEvent( ) from entry-point "GPS Harvest Stream"
+        not AEIEvent( this after[0s,1s] $gpsLocoEvent, locomotiveId == $gpsLocoEvent.getLocomotiveId() ) from entry-point "AEI Harvest Stream"
+    then
+        logger.error("********** Consecutive AEIEvent event missing for {}",$gpsLocoEvent.getLocomotiveId());
+end
